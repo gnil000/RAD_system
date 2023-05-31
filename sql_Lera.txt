@@ -1,0 +1,177 @@
+create table Product(
+	id_product serial primary key,
+	name_product varchar(50) not null,
+	ed_product varchar(20) not null
+);
+
+create table Client(
+	id_client serial primary key,
+	name_client varchar(100) not null,
+	adress varchar(100),
+	phone varchar(12)
+);
+
+create table Futura(
+	id_futura serial primary key,
+	data_fut date,
+	id_client serial references Client(id_client) on DELETE CASCADE,
+	total_sum real default 0,
+	predoplata bool
+);
+
+create table FuturaInfo(
+	id_fut_info serial primary key,
+	id_futura serial references Futura(id_futura) on DELETE CASCADE,
+	id_product serial references Product(id_product) on DELETE CASCADE,
+	quantity real,
+	price real,
+	quantitiy_otgruzka real,
+	price_otgruzka real
+);
+
+drop table futurainfo
+
+drop trigger Futura on futuraInfo
+
+CREATE OR REPLACE FUNCTION process_price_change() RETURNS TRIGGER AS $Futura$
+    BEGIN
+        --
+        -- Добавление строки в emp_audit, которая отражает операцию, выполняемую в emp;
+        -- для определения типа операции применяется специальная переменная TG_OP.
+        --
+        IF (TG_OP = 'DELETE') THEN
+            Update Futura set total_sum=total_sum-1;
+            RETURN OLD;
+        ELSIF (TG_OP = 'INSERT') THEN
+            Update Futura set total_sum=total_sum+1;
+            RETURN NEW;
+        END IF;
+        RETURN NULL; -- возвращаемое значение для триггера AFTER игнорируется
+    END;
+$Futura$ LANGUAGE plpgsql;
+
+CREATE TRIGGER Futura
+AFTER INSERT OR DELETE ON FuturaInfo
+    FOR EACH ROW EXECUTE PROCEDURE process_price_change();
+
+
+CREATE OR REPLACE FUNCTION process_quantity_otgruzka_create() RETURNS TRIGGER AS $FuturaInfo$
+    BEGIN
+        --
+        -- Добавление строки в emp_audit, которая отражает операцию, выполняемую в emp;
+        -- для определения типа операции применяется специальная переменная TG_OP.
+        --
+        IF (TG_OP = 'INSERT') THEN
+            Update FuturaInfo set price_otgruzka=(price/quantity)*quantitiy_otgruzka;
+            RETURN NEW;
+        ELSIF (TG_OP = 'UPDATE') THEN
+            Update FuturaInfo set price_otgruzka=(price/quantity)*new.quantitiy_otgruzka;
+            RETURN NEW;
+        END IF;
+        RETURN NULL; -- возвращаемое значение для триггера AFTER игнорируется
+    END;
+$FuturaInfo$ LANGUAGE plpgsql;
+
+CREATE TRIGGER FuturaInfo
+AFTER INSERT OR DELETE ON FuturaInfo
+    FOR EACH ROW EXECUTE PROCEDURE process_quantity_otgruzka_create();
+
+drop trigger FuturaInfo on futuraInfo
+
+
+CREATE OR REPLACE FUNCTION process_total_sum() RETURNS TRIGGER AS $Futura$
+    BEGIN
+        --
+        -- Добавление строки в emp_audit, которая отражает операцию, выполняемую в emp;
+        -- для определения типа операции применяется специальная переменная TG_OP.
+        --
+        IF (TG_OP = 'DELETE') THEN
+            Update Futura set total_sum=total_sum - old.price where(futura.id_futura = old.id_futura);
+            RETURN OLD;
+        ELSIF (TG_OP = 'INSERT') THEN
+            Update Futura set total_sum=total_sum + new.price where(futura.id_futura = new.id_futura);
+            RETURN NEW;
+        END IF;
+        RETURN NULL; -- возвращаемое значение для триггера AFTER игнорируется
+    END;
+$Futura$ LANGUAGE plpgsql;
+
+CREATE TRIGGER Futura2
+AFTER INSERT OR DELETE ON FuturaInfo
+    FOR EACH ROW 
+	EXECUTE PROCEDURE process_total_sum();
+
+
+drop trigger futura2 on futurainfo
+
+
+
+
+
+
+update futurainfo set quantity = 99 where id_fut_info = 1
+
+select * from client
+select * from product
+select * from futura
+select * from futuraInfo
+
+drop table product;
+drop table client;
+drop table futura;
+drop table futurainfo;
+
+insert into Product values(default, 'Snikers', 'граммы');
+insert into Product values(default, 'Bounty', 'количество');
+insert into Product values(default, 'Adrenaline', 'количество');
+insert into Product values(default, 'Макароны', 'граммы');
+insert into Product values(default, 'Лимонад', 'литры');
+
+
+insert into Client(id_client, name_client, adress, phone) values(default, 'Бабаров Бабар Бабарович', 'Улица Пушкина дом Колотушкина', '+79187777777');
+insert into Client(id_client, name_client, adress, phone) values(default, 'Арзамасов Алексей Викторович', 'Улица Пушкина дом 241', '+79187775732');
+insert into Client(id_client, name_client, adress, phone) values(default, 'Каравай Андрей Игоревич', 'Улица Домушкина дом 411', '+79187445467');
+insert into Client(id_client, name_client, adress, phone) values(default, 'Домашний Виктор Викторович', 'Улица Красная дом 12', '+79184557887');
+insert into Client(id_client, name_client, adress, phone) values(default, 'Гагарин Юрий Викторович', 'Улица Космонавтики дом 51', '+79187737211');
+
+
+insert into Futura(id_futura, data_fut, id_client, predoplata) values(default, '03.04.2023', 1, true) 
+insert into Futura(id_futura, data_fut, id_client, predoplata) values(default, '22.05.2022', 2, true) 
+insert into Futura(id_futura, data_fut, id_client, predoplata) values(default, '01.02.2023', 3, false) 
+insert into Futura(id_futura, data_fut, id_client, predoplata) values(default, '10.03.2023', 4, false) 
+insert into Futura(id_futura, data_fut, id_client, predoplata) values(default, '11.03.2023', 5, true) 
+
+
+insert into FuturaInfo(id_fut_info, id_futura, id_product, quantity, quantitiy_otgruzka, price) values(default, 1, 1, 99, 52, 9982);
+insert into FuturaInfo(id_fut_info, id_futura, id_product, quantity, quantitiy_otgruzka, price) values(default, 1, 3, 42, 12, 5822);
+insert into FuturaInfo(id_fut_info, id_futura, id_product, quantity, quantitiy_otgruzka, price) values(default, 2, 2, 124, 44, 12000);
+insert into FuturaInfo(id_fut_info, id_futura, id_product, quantity, quantitiy_otgruzka, price) values(default, 2, 4, 224, 112, 5900);
+insert into FuturaInfo(id_fut_info, id_futura, id_product, quantity, quantitiy_otgruzka, price) values(default, 3, 3, 10, 10, 999);
+insert into FuturaInfo(id_fut_info, id_futura, id_product, quantity, quantitiy_otgruzka, price) values(default, 4, 5, 300, 300, 10000);
+insert into FuturaInfo(id_fut_info, id_futura, id_product, quantity, quantitiy_otgruzka, price) values(default, 5, 5, 88, 22, 8582);
+insert into FuturaInfo(id_fut_info, id_futura, id_product, quantity, quantitiy_otgruzka, price) values(default, 5, 2, 12, 12, 982);
+
+
+
+select product.name_product, quantity, price 
+from futurainfo 
+inner join product on futurainfo.id_product = product.id_product
+where (futurainfo.id_futura in (select futura.id_futura from futura where futura.id_client in (1,3,4))) and (futurainfo.id_futura in (select futura.id_futura from futura where futura.data_fut between '01.02.2022' and '30.05.2023'))
+
+
+
+--для формирования накладной
+select product.name_product, sum(quantitiy_otgruzka), sum(price_otgruzka)
+from futurainfo
+inner join product on futurainfo.id_product = product.id_product
+where (futurainfo.id_futura in (select futura.id_futura from futura where futura.id_client in (1,2,3,4,5)))
+group by product.name_product
+
+--для формирования отчёта
+select product.name_product, sum(quantitiy_otgruzka), sum(price_otgruzka), sum(quantity-quantitiy_otgruzka) as qua_qua_otgr, sum(price-price_otgruzka) as price_price_otgr
+from futurainfo
+inner join product on futurainfo.id_product = product.id_product
+where (futurainfo.id_futura in (select futura.id_futura from futura where futura.id_client in (1,2,3,4,5) and futura.predoplata = true and futura.data_fut between '01.02.2022' and '30.05.2023')) 
+group by product.name_product
+
+
